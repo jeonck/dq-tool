@@ -54,24 +54,23 @@ def safe_outlier_detection(series):
         if pd.api.types.is_numeric_dtype(series):
             series_numeric = pd.to_numeric(series, errors='coerce')
             series_clean = series_numeric.dropna()
-            
+
             if len(series_clean) < 4:  # Need at least 4 points for IQR
-                return pd.Series(dtype=type(series))
-                
+                return pd.Series(dtype='object', name=series.name if hasattr(series, 'name') else None)
+
             Q1 = series_clean.quantile(0.25)
             Q3 = series_clean.quantile(0.75)
             IQR = Q3 - Q1
             lower_bound = Q1 - 1.5 * IQR
             upper_bound = Q3 + 1.5 * IQR
-            
-            outliers = series[
-                (pd.to_numeric(series, errors='coerce') < lower_bound) | 
-                (pd.to_numeric(series, errors='coerce') > upper_bound)
-            ]
+
+            series_as_numeric = pd.to_numeric(series, errors='coerce')
+            outlier_mask = (series_as_numeric < lower_bound) | (series_as_numeric > upper_bound)
+            outliers = series[outlier_mask]
             return outliers
-        return pd.Series(dtype=type(series))
+        return pd.Series(dtype='object', name=series.name if hasattr(series, 'name') else None)
     except:
-        return pd.Series(dtype=type(series))
+        return pd.Series(dtype='object', name=series.name if hasattr(series, 'name') else None)
 
 # --- 1. 앱 제목 ---
 st.title("📊 종합 데이터 품질 진단 도구")
