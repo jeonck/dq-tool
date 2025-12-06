@@ -251,11 +251,15 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
         # 5. 정확성(Accuracy) 점검 - 데이터 유효성
         if accuracy_col in df.columns:
             col_data = df[accuracy_col]
+            violations_found = False  # Track if any violations are found
+
             # Check for datetime-like columns
             if pd.api.types.is_datetime64_any_dtype(col_data) or 'date' in accuracy_col.lower() or 'year' in accuracy_col.lower():
                 try:
                     if pd.api.types.is_numeric_dtype(col_data):
-                        future_years = df[df[accuracy_col] > datetime.now().year]
+                        # Check for future years using safe conversion
+                        safe_numeric_col = pd.to_numeric(df[accuracy_col], errors='coerce')
+                        future_years = df[safe_numeric_col > datetime.now().year]
                         if len(future_years) > 0:
                             run_dq_check(
                                 check_name=f'{accuracy_col} 정확성 점검',
@@ -263,16 +267,17 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                                 message=f'미래 년도 데이터 {len(future_years)}건 발견: {future_years[accuracy_col].tolist()}',
                                 metric_type='정확성(Accuracy)'
                             )
+                            violations_found = True
                         else:
                             run_dq_check(
-                                check_name=f'{accuracy_col} 정확성 점검', 
-                                status='PASS', 
+                                check_name=f'{accuracy_col} 정확성 점검',
+                                status='PASS',
                                 message='모든 년도 데이터 유효',
                                 metric_type='정확성(Accuracy)'
                             )
                     elif pd.api.types.is_datetime64_any_dtype(col_data):
                         # datetime 형식인 경우
-                        future_dates = df[pd.to_datetime(df[accuracy_col]).dt.year > datetime.now().year]
+                        future_dates = df[pd.to_datetime(df[accuracy_col], errors='coerce').dt.year > datetime.now().year]
                         if len(future_dates) > 0:
                             run_dq_check(
                                 check_name=f'{accuracy_col} 정확성 점검',
@@ -280,10 +285,11 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                                 message=f'미래 날짜 데이터 {len(future_dates)}건 발견',
                                 metric_type='정확성(Accuracy)'
                             )
+                            violations_found = True
                         else:
                             run_dq_check(
-                                check_name=f'{accuracy_col} 정확성 점검', 
-                                status='PASS', 
+                                check_name=f'{accuracy_col} 정확성 점검',
+                                status='PASS',
                                 message='모든 날짜 데이터 유효',
                                 metric_type='정확성(Accuracy)'
                             )
@@ -299,50 +305,100 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                                     message=f'미래 날짜 데이터 {len(future_dates)}건 발견',
                                     metric_type='정확성(Accuracy)'
                                 )
+                                violations_found = True
                             else:
                                 run_dq_check(
-                                    check_name=f'{accuracy_col} 정확성 점검', 
-                                    status='PASS', 
+                                    check_name=f'{accuracy_col} 정확성 점검',
+                                    status='PASS',
                                     message='날짜 데이터 유효',
                                     metric_type='정확성(Accuracy)'
                                 )
                         else:
                             run_dq_check(
-                                check_name=f'{accuracy_col} 정확성 점검', 
-                                status='PASS', 
+                                check_name=f'{accuracy_col} 정확성 점검',
+                                status='PASS',
                                 message='데이터 형식 점검 완료',
                                 metric_type='정확성(Accuracy)'
                             )
                 except:
                     run_dq_check(
-                        check_name=f'{accuracy_col} 정확성 점검', 
-                        status='PASS', 
+                        check_name=f'{accuracy_col} 정확성 점검',
+                        status='PASS',
                         message='데이터 형식 점검 불가',
                         metric_type='정확성(Accuracy)'
                     )
             elif pd.api.types.is_numeric_dtype(col_data):
                 # 숫자형 데이터에 대한 정확성 점검
-                if col_data.min() < 0 if col_data.count() > 0 else False and 'count' in accuracy_col.lower():
-                    # 음수 개수에 대한 점검
-                    negative_values = df[df[accuracy_col] < 0]
+                if 'count' in accuracy_col.lower() or 'order' in accuracy_col.lower():
+                    # 음수 주문 수에 대한 업무 규칙 점검
+                    safe_numeric_col = pd.to_numeric(df[accuracy_col], errors='coerce')
+                    negative_values = df[safe_numeric_col < 0]
                     if len(negative_values) > 0:
                         run_dq_check(
                             check_name=f'{accuracy_col} 정확성 점검',
                             status='FAIL',
-                            message=f'음수 값 {len(negative_values)}건 발견: {negative_values[accuracy_col].tolist()}',
+                            message=f'음수 주문 수 {len(negative_values)}건 발견: {negative_values[accuracy_col].tolist()}',
                             metric_type='정확성(Accuracy)'
                         )
+                        violations_found = True
                     else:
                         run_dq_check(
-                            check_name=f'{accuracy_col} 정확성 점검', 
-                            status='PASS', 
-                            message='모든 수치 데이터 유효',
+                            check_name=f'{accuracy_col} 정확성 점검',
+                            status='PASS',
+                            message='모든 주문 수 유효',
+                            metric_type='정확성(Accuracy)'
+                        )
+                elif 'age' in accuracy_col.lower():
+                    # 음수 나이에 대한 업무 규칙 점검
+                    safe_numeric_col = pd.to_numeric(df[accuracy_col], errors='coerce')
+                    negative_values = df[safe_numeric_col < 0]
+                    if len(negative_values) > 0:
+                        run_dq_check(
+                            check_name=f'{accuracy_col} 정확성 점검',
+                            status='FAIL',
+                            message=f'음수 나이 {len(negative_values)}건 발견: {negative_values[accuracy_col].tolist()}',
+                            metric_type='정확성(Accuracy)'
+                        )
+                        violations_found = True
+                    else:
+                        run_dq_check(
+                            check_name=f'{accuracy_col} 정확성 점검',
+                            status='PASS',
+                            message='모든 나이 유효',
+                            metric_type='정확성(Accuracy)'
+                        )
+                elif 'year' in accuracy_col.lower():
+                    # 연도에 대한 업무 규칙 점검 (미래/과거 제약)
+                    safe_numeric_col = pd.to_numeric(df[accuracy_col], errors='coerce')
+                    future_years = df[safe_numeric_col > datetime.now().year]
+                    past_years = df[(safe_numeric_col < 1900) & (safe_numeric_col > 0)]  # Only check positive values
+                    if len(future_years) > 0:
+                        run_dq_check(
+                            check_name=f'{accuracy_col} 정확성 점검',
+                            status='FAIL',
+                            message=f'미래 년도 데이터 {len(future_years)}건 발견: {future_years[accuracy_col].tolist()}',
+                            metric_type='정확성(Accuracy)'
+                        )
+                        violations_found = True
+                    elif len(past_years) > 0:
+                        run_dq_check(
+                            check_name=f'{accuracy_col} 정확성 점검',
+                            status='FAIL',
+                            message=f'1900년 이전 년도 데이터 {len(past_years)}건 발견: {past_years[accuracy_col].tolist()}',
+                            metric_type='정확성(Accuracy)'
+                        )
+                        violations_found = True
+                    else:
+                        run_dq_check(
+                            check_name=f'{accuracy_col} 정확성 점검',
+                            status='PASS',
+                            message='모든 년도 유효',
                             metric_type='정확성(Accuracy)'
                         )
                 else:
                     run_dq_check(
-                        check_name=f'{accuracy_col} 정확성 점검', 
-                        status='PASS', 
+                        check_name=f'{accuracy_col} 정확성 점검',
+                        status='PASS',
                         message='수치 데이터 정확성 확보',
                         metric_type='정확성(Accuracy)'
                     )
@@ -356,17 +412,18 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                         message=f'유효하지 않은 이메일 형식 {len(invalid_emails)}건 발견',
                         metric_type='정확성(Accuracy)'
                     )
+                    violations_found = True
                 elif has_email_pattern:
                     run_dq_check(
-                        check_name=f'{accuracy_col} 정확성 점검', 
-                        status='PASS', 
+                        check_name=f'{accuracy_col} 정확성 점검',
+                        status='PASS',
                         message='이메일 형식 유효',
                         metric_type='정확성(Accuracy)'
                     )
                 else:
                     run_dq_check(
-                        check_name=f'{accuracy_col} 정확성 점검', 
-                        status='PASS', 
+                        check_name=f'{accuracy_col} 정확성 점검',
+                        status='PASS',
                         message='데이터 형식 확인 완료',
                         metric_type='정확성(Accuracy)'
                     )
@@ -407,8 +464,11 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
             if pd.api.types.is_datetime64_any_dtype(col_data) or 'date' in timely_col.lower() or 'year' in timely_col.lower():
                 try:
                     if pd.api.types.is_numeric_dtype(col_data):
-                        # 숫자형 날짜/년도 데이터 점검
-                        future_values = df[df[timely_col] > datetime.now().year]
+                        # 숫자형 날짜/년도 데이터 점검 - using safe conversion
+                        safe_numeric_col = pd.to_numeric(df[timely_col], errors='coerce')
+                        future_values = df[safe_numeric_col > datetime.now().year]
+                        past_values = df[(safe_numeric_col < 1900) & (safe_numeric_col > 0)]  # Only check positive values
+
                         if len(future_values) > 0:
                             run_dq_check(
                                 check_name=f'{timely_col} 적시성 점검',
@@ -416,16 +476,23 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                                 message=f'미래 날짜/년도 데이터 {len(future_values)}건 발견: {future_values[timely_col].tolist()}',
                                 metric_type='적시성(Timeliness)'
                             )
+                        elif len(past_values) > 0:
+                            run_dq_check(
+                                check_name=f'{timely_col} 적시성 점검',
+                                status='FAIL',
+                                message=f'1900년 이전 날짜/년도 데이터 {len(past_values)}건 발견: {past_values[timely_col].tolist()}',
+                                metric_type='적시성(Timeliness)'
+                            )
                         else:
                             run_dq_check(
-                                check_name=f'{timely_col} 적시성 점검', 
-                                status='PASS', 
+                                check_name=f'{timely_col} 적시성 점검',
+                                status='PASS',
                                 message='모든 날짜/년도 데이터 적시성 확보',
                                 metric_type='적시성(Timeliness)'
                             )
                     elif pd.api.types.is_datetime64_any_dtype(col_data):
                         # datetime 형식인 경우
-                        future_dates = df[pd.to_datetime(df[timely_col]).dt.year > datetime.now().year]
+                        future_dates = df[pd.to_datetime(df[timely_col], errors='coerce').dt.year > datetime.now().year]
                         if len(future_dates) > 0:
                             run_dq_check(
                                 check_name=f'{timely_col} 적시성 점검',
@@ -435,42 +502,50 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                             )
                         else:
                             run_dq_check(
-                                check_name=f'{timely_col} 적시성 점검', 
-                                status='PASS', 
+                                check_name=f'{timely_col} 적시성 점검',
+                                status='PASS',
                                 message='모든 날짜 데이터 적시성 확보',
                                 metric_type='적시성(Timeliness)'
                             )
                     else:
                         # Try to convert to datetime
                         converted_dates = safe_to_datetime(df[timely_col])
-                        future_dates = df[converted_dates.dt.year > datetime.now().year] if not converted_dates.isna().all() else pd.DataFrame()
-                        if len(future_dates) > 0:
-                            run_dq_check(
-                                check_name=f'{timely_col} 적시성 점검',
-                                status='FAIL',
-                                message=f'미래 날짜 데이터 {len(future_dates)}건 발견',
-                                metric_type='적시성(Timeliness)'
-                            )
+                        if not converted_dates.isna().all():
+                            future_dates = df[converted_dates.dt.year > datetime.now().year]
+                            if len(future_dates) > 0:
+                                run_dq_check(
+                                    check_name=f'{timely_col} 적시성 점검',
+                                    status='FAIL',
+                                    message=f'미래 날짜 데이터 {len(future_dates)}건 발견',
+                                    metric_type='적시성(Timeliness)'
+                                )
+                            else:
+                                run_dq_check(
+                                    check_name=f'{timely_col} 적시성 점검',
+                                    status='PASS',
+                                    message='날짜 데이터 적시성 확보',
+                                    metric_type='적시성(Timeliness)'
+                                )
                         else:
                             run_dq_check(
-                                check_name=f'{timely_col} 적시성 점검', 
-                                status='PASS', 
+                                check_name=f'{timely_col} 적시성 점검',
+                                status='PASS',
                                 message='날짜 데이터 적시성 확보',
                                 metric_type='적시성(Timeliness)'
                             )
                 except:
                     # 날짜 변환에 실패하면 점검 불가 처리
                     run_dq_check(
-                        check_name=f'{timely_col} 적시성 점검', 
-                        status='PASS', 
+                        check_name=f'{timely_col} 적시성 점검',
+                        status='PASS',
                         message='날짜 형식 점검 불가',
                         metric_type='적시성(Timeliness)'
                     )
             else:
                 # 날짜 형식이 아닌 경우 기본 통과
                 run_dq_check(
-                    check_name=f'{timely_col} 적시성 점검', 
-                    status='PASS', 
+                    check_name=f'{timely_col} 적시성 점검',
+                    status='PASS',
                     message='적시성 점검 불필요',
                     metric_type='적시성(Timeliness)'
                 )
