@@ -631,6 +631,27 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
             checklist_df = pd.DataFrame(checklist_results)
             st.dataframe(checklist_df, use_container_width=True)
 
+            # 체크리스트 진단 설명 추가
+            with st.expander("체크리스트 진단 설명"):
+                st.markdown("""
+                **체크리스트 진단은 7대 데이터 품질 지표 중 다음과 같은 성질을 진단합니다:**
+
+                1. **완전성 (Completeness)**
+                   - "결측치 확인": 데이터의 누락 여부를 점검
+                   - NULL 또는 빈 값이 있는지 확인
+
+                2. **고유성 (Uniqueness)**
+                   - "고유값 확인": 중복값이 있는지 점검
+                   - 데이터가 고유한지 (중복되지 않았는지) 확인
+
+                3. **유용성 (Usability)**
+                   - "데이터 유형 확인": 데이터가 사용 가능하고 의미 있는 형식인지 점검
+                   - 최소한의 길이나 형식을 만족하는지 확인
+
+                *체크리스트 진단은 7대 품질 지표의 기초 검증 단계로, 각 지표에 대한 최소한의 확인을 수행하여
+                데이터 품질의 전반적인 상태를 빠르게 파악할 수 있게 합니다.*
+                """)
+
         if realtime_measure_enabled:
             # 비정형 실측 진단 실행
             st.subheader("🔍 비정형 실측 진단 결과")
