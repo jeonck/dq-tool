@@ -519,36 +519,74 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
     # --- 6. 4대 진단 방법 실행 ---
     try:
         if profiling_enabled:
-            # 프로파일링(Profiling) 실행
-            st.subheader("📈 프로파일링 결과")
-            profile_results = []
-            
+            # 프로파일링(Profiling) 실행 - 값 진단 및 구조 진단
+            st.subheader("📈 프로파일링 결과 (값 진단 및 구조 진단)")
+
+            # 값 진단 (Value Profiling)
+            st.markdown("**값 진단 (Value Analysis):**")
+            value_profile_results = []
+
             for col in df.columns:
                 col_type = str(df[col].dtype)
                 total_count = len(df)
                 missing_count = df[col].isnull().sum()
                 unique_count = df[col].nunique()
                 completeness_rate = (total_count - missing_count) / total_count * 100
-                
-                profile_results.append({
+
+                # 패턴 분석 (Pattern Analysis) - 예시
+                pattern_deviation = 0
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    # 수치형 데이터의 경우 평균과 표준편차 기반 이상치 분석 (패턴 분석)
+                    if df[col].count() > 0:  # Non-null count
+                        mean_val = df[col].mean()
+                        std_val = df[col].std()
+                        if std_val and std_val != 0:
+                            z_scores = ((df[col] - mean_val) / std_val).abs()
+                            pattern_deviation = (z_scores > 3).sum()  # Z-score > 3인 값 수
+
+                elif pd.api.types.is_object_dtype(df[col]):
+                    # 텍스트 데이터의 경우 길이 분석
+                    try:
+                        avg_length = df[col].astype(str).str.len().mean()
+                    except:
+                        avg_length = 0
+
+                value_profile_results.append({
                     '컬럼명': col,
                     '데이터 유형': col_type,
                     '총 행 수': total_count,
                     '결측치 수': missing_count,
                     '고유값 수': unique_count,
-                    '완전성 비율': f'{completeness_rate:.2f}%'
+                    '완전성 비율': f'{completeness_rate:.2f}%',
+                    '이상치 수 (패턴 분석)': int(pattern_deviation) if pattern_deviation is not None else 0
                 })
-            
-            profile_df = pd.DataFrame(profile_results)
-            st.dataframe(profile_df, use_container_width=True)
-            
+
+            value_profile_df = pd.DataFrame(value_profile_results)
+            st.dataframe(value_profile_df, use_container_width=True)
+
+            # 구조 진단 (Structure Profiling) - 메타데이터 분석
+            st.markdown("**구조 진단 (Structure Analysis):**")
+            structure_profile_results = []
+
+            for col in df.columns:
+                structure_profile_results.append({
+                    '컬럼명': col,
+                    '데이터 유형': str(df[col].dtype),
+                    '컬럼 길이 (최대)': df[col].astype(str).str.len().max() if len(df) > 0 else 0,
+                    '널 가능 여부': 'Y' if df[col].isnull().any() else 'N',
+                    '고유값 비율': f'{(df[col].nunique() / len(df) * 100):.2f}%' if len(df) > 0 else '0%'
+                })
+
+            structure_profile_df = pd.DataFrame(structure_profile_results)
+            st.dataframe(structure_profile_df, use_container_width=True)
+
             # Additional uniqueness information in profiling
-            st.subheader("📊 고유성 분석")
+            st.markdown("**고유성 분석:**")
             uniqueness_analysis = []
             for col in df.columns:
                 total_count = len(df)
                 unique_count = df[col].nunique()
-                
+
                 # Count how many values appear exactly once (genuinely unique)
                 try:
                     value_counts = df[col].value_counts()
@@ -570,30 +608,80 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                     '중복 발생 수': int(duplicate_occurrences) if duplicate_occurrences is not None else 0,
                     '고유성 비율': f'{uniqueness_rate:.2f}%'
                 })
-            
+
             uniqueness_df = pd.DataFrame(uniqueness_analysis)
             st.dataframe(uniqueness_df, use_container_width=True)
 
         if business_rule_enabled:
-            # 업무규칙 진단 실행
+            # 업무규칙 진단 실행 - 비즈니스 로직 기반 데이터 측정
             st.subheader("📋 업무규칙 진단 결과")
-            # 예제: order_count > 0인지 확인
+
+            # 업무규칙 도출 및 정의 (예시)
+            rule_violations_found = False
+            all_rule_violations = pd.DataFrame()
+
+            # 업무규칙 1: order_count는 음수가 아니어야 함
             if 'order_count' in df.columns:
-                try:
-                    negative_orders = safe_check_business_rules(df, 'order_count')
-                    if isinstance(negative_orders, pd.Series) and len(negative_orders) > 0:
-                        st.write(f"❌ 업무규칙 위반: 음수 주문 수 {len(negative_orders)}건")
-                        # Get rows where order_count is in negative_orders
-                        negative_indices = df[df['order_count'] < 0].index
-                        if len(negative_indices) > 0:
-                            rule_violations = df.loc[negative_indices]
-                            st.dataframe(rule_violations, use_container_width=True)
-                        else:
-                            st.write("✅ 모든 데이터가 업무규칙을 준수합니다")
+                negative_orders = df[df['order_count'] < 0]
+                if len(negative_orders) > 0:
+                    rule_violations_found = True
+                    st.write(f"❌ 'order_count < 0' 업무규칙 위반: {len(negative_orders)}건")
+                    rule_violations = negative_orders.copy()
+                    rule_violations['violation_type'] = '음수 주문 수'
+                    if all_rule_violations.empty:
+                        all_rule_violations = rule_violations
                     else:
-                        st.write("✅ 모든 데이터가 업무규칙을 준수합니다")
-                except Exception as e:
-                    st.write(f"업무규칙 진단 중 오류가 발생했습니다: {str(e)}")
+                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+
+            # 업무규칙 2: age는 음수가 아니어야 함
+            if 'age' in df.columns:
+                negative_ages = df[df['age'] < 0]
+                if len(negative_ages) > 0:
+                    rule_violations_found = True
+                    st.write(f"❌ 'age < 0' 업무규칙 위반: {len(negative_ages)}건")
+                    rule_violations = negative_ages.copy()
+                    rule_violations['violation_type'] = '음수 나이'
+                    if all_rule_violations.empty:
+                        all_rule_violations = rule_violations
+                    else:
+                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+
+            # 업무규칙 3: join_year는 미래가 아니어야 함
+            if 'join_year' in df.columns:
+                future_years = df[df['join_year'] > datetime.now().year]
+                if len(future_years) > 0:
+                    rule_violations_found = True
+                    st.write(f"❌ 'join_year > 현재 연도' 업무규칙 위반: {len(future_years)}건")
+                    rule_violations = future_years.copy()
+                    rule_violations['violation_type'] = '미래 가입 연도'
+                    if all_rule_violations.empty:
+                        all_rule_violations = rule_violations
+                    else:
+                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+
+            # 업무규칙 4: join_year는 1900년 이전이 아니어야 함
+            if 'join_year' in df.columns:
+                past_years = df[df['join_year'] < 1900]
+                if len(past_years) > 0:
+                    rule_violations_found = True
+                    st.write(f"❌ 'join_year < 1900' 업무규칙 위반: {len(past_years)}건")
+                    rule_violations = past_years.copy()
+                    rule_violations['violation_type'] = '1900년 이전 가입 연도'
+                    if all_rule_violations.empty:
+                        all_rule_violations = rule_violations
+                    else:
+                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+
+            if rule_violations_found:
+                st.subheader("업무규칙 위반 상세 데이터:")
+                # Remove the violation_type column for display if it exists in the original data
+                if 'violation_type' in all_rule_violations.columns:
+                    display_violations = all_rule_violations.drop('violation_type', axis=1)
+                else:
+                    display_violations = all_rule_violations
+                st.dataframe(display_violations, use_container_width=True)
+            else:
+                st.write("✅ 모든 데이터가 정의된 업무규칙을 준수합니다")
 
             # 업무규칙 진단 설명 추가
             with st.expander("업무규칙 진단 설명"):
