@@ -551,18 +551,24 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                 unique_count = df[col].nunique()
                 
                 # Count how many values appear exactly once (genuinely unique)
-                value_counts = df[col].value_counts()
-                unique_once_count = (value_counts == 1).sum()  # Count of values that appear exactly once
-                # Count total occurrences of duplicated values
-                duplicate_occurrences = value_counts[value_counts > 1].sum()  # Total count of duplicates
-                
-                uniqueness_rate = unique_once_count / total_count * 100  # Proportion of entries that are unique
-                
+                try:
+                    value_counts = df[col].value_counts()
+                    unique_once_count = (value_counts == 1).sum()  # Count of values that appear exactly once
+                    # Count total occurrences of duplicated values
+                    duplicate_occurrences = value_counts[value_counts > 1].sum() if not value_counts.empty else 0  # Total count of duplicates
+
+                    uniqueness_rate = unique_once_count / total_count * 100 if total_count > 0 else 0  # Proportion of entries that are unique
+                except:
+                    # Fallback values if something goes wrong
+                    unique_once_count = 0
+                    duplicate_occurrences = 0
+                    uniqueness_rate = 0
+
                 uniqueness_analysis.append({
                     '컬럼명': col,
                     '총 행 수': total_count,
                     '고유값 수': unique_count,
-                    '중복 발생 수': duplicate_occurrences,
+                    '중복 발생 수': int(duplicate_occurrences) if duplicate_occurrences is not None else 0,
                     '고유성 비율': f'{uniqueness_rate:.2f}%'
                 })
             
@@ -574,13 +580,21 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
             st.subheader("📋 업무규칙 진단 결과")
             # 예제: order_count > 0인지 확인
             if 'order_count' in df.columns:
-                negative_orders = safe_check_business_rules(df, 'order_count')
-                if len(negative_orders) > 0:
-                    st.write(f"❌ 업무규칙 위반: 음수 주문 수 {len(negative_orders)}건")
-                    rule_violations = df[df['order_count'].isin(negative_orders)]
-                    st.dataframe(rule_violations, use_container_width=True)
-                else:
-                    st.write("✅ 모든 데이터가 업무규칙을 준수합니다")
+                try:
+                    negative_orders = safe_check_business_rules(df, 'order_count')
+                    if isinstance(negative_orders, pd.Series) and len(negative_orders) > 0:
+                        st.write(f"❌ 업무규칙 위반: 음수 주문 수 {len(negative_orders)}건")
+                        # Get rows where order_count is in negative_orders
+                        negative_indices = df[df['order_count'] < 0].index
+                        if len(negative_indices) > 0:
+                            rule_violations = df.loc[negative_indices]
+                            st.dataframe(rule_violations, use_container_width=True)
+                        else:
+                            st.write("✅ 모든 데이터가 업무규칙을 준수합니다")
+                    else:
+                        st.write("✅ 모든 데이터가 업무규칙을 준수합니다")
+                except Exception as e:
+                    st.write(f"업무규칙 진단 중 오류가 발생했습니다: {str(e)}")
 
         if checklist_enabled:
             # 체크리스트 진단 실행
@@ -593,11 +607,26 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
                 null_count = df[col].isnull().sum()
                 unique_count = df[col].nunique()
                 is_unique = safe_is_unique(df[col])  # Use safe function
-                
+
+                # Safe type check
+                try:
+                    col_dtype = df[col].dtype
+                    if col_dtype != 'object':
+                        type_check_result = 'PASS'
+                    else:
+                        # For object types, check string length
+                        try:
+                            min_len = df[col].astype(str).str.len().min()
+                            type_check_result = 'PASS' if min_len and min_len > 0 else 'WARN'
+                        except:
+                            type_check_result = 'WARN'
+                except:
+                    type_check_result = 'WARN'
+
                 checklist_results.extend([
                     {'항목': f'{col} - 결측치 확인', '결과': 'PASS' if null_count == 0 else 'FAIL'},
                     {'항목': f'{col} - 고유값 확인', '결과': 'PASS' if is_unique else 'FAIL'},  # Fixed: Proper uniqueness check
-                    {'항목': f'{col} - 데이터 유형 확인', '결과': 'PASS' if df[col].dtype != 'object' or (df[col].dtype == 'object' and df[col].astype(str).str.len().min() > 0) else 'WARN'}
+                    {'항목': f'{col} - 데이터 유형 확인', '결과': type_check_result}
                 ])
             
             checklist_df = pd.DataFrame(checklist_results)
@@ -610,13 +639,16 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
             numeric_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
             if numeric_cols:
                 for col in numeric_cols:
-                    outliers = safe_outlier_detection(df[col])
-                    if len(outliers) > 0:
-                        st.write(f"❌ {col} 컬럼 이상치 {len(outliers)}건 발견")
-                        outlier_rows = df[df.index.isin(outliers.index)]
-                        st.dataframe(outlier_rows, use_container_width=True)
-                    else:
-                        st.write(f"✅ {col} 컬럼 이상치 없음")
+                    try:
+                        outliers = safe_outlier_detection(df[col])
+                        if isinstance(outliers, pd.Series) and len(outliers) > 0:
+                            st.write(f"❌ {col} 컬럼 이상치 {len(outliers)}건 발견")
+                            outlier_rows = df[df.index.isin(outliers.index)]
+                            st.dataframe(outlier_rows, use_container_width=True)
+                        else:
+                            st.write(f"✅ {col} 컬럼 이상치 없음")
+                    except Exception as e:
+                        st.write(f"{col} 컬럼 이상치 분석 중 오류 발생: {str(e)}")
             else:
                 st.write("🔢 숫자형 컬럼이 없어 이상치 분석을 수행할 수 없습니다")
 
