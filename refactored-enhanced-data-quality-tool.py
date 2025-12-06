@@ -622,55 +622,79 @@ if st.button("데이터 품질 종합 진단 실행", type="primary"):
 
             # 업무규칙 1: order_count는 음수가 아니어야 함
             if 'order_count' in df.columns:
-                negative_orders = df[df['order_count'] < 0]
-                if len(negative_orders) > 0:
-                    rule_violations_found = True
-                    st.write(f"❌ 'order_count < 0' 업무규칙 위반: {len(negative_orders)}건")
-                    rule_violations = negative_orders.copy()
-                    rule_violations['violation_type'] = '음수 주문 수'
-                    if all_rule_violations.empty:
-                        all_rule_violations = rule_violations
-                    else:
-                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                try:
+                    # Convert to numeric, coercing errors to NaN
+                    numeric_order_count = pd.to_numeric(df['order_count'], errors='coerce')
+                    negative_orders_mask = numeric_order_count < 0
+                    negative_orders = df[negative_orders_mask]
+                    if len(negative_orders) > 0:
+                        rule_violations_found = True
+                        st.write(f"❌ 'order_count < 0' 업무규칙 위반: {len(negative_orders)}건")
+                        rule_violations = negative_orders.copy()
+                        rule_violations['violation_type'] = '음수 주문 수'
+                        if all_rule_violations.empty:
+                            all_rule_violations = rule_violations
+                        else:
+                            all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                except:
+                    pass  # Skip if conversion fails
 
             # 업무규칙 2: age는 음수가 아니어야 함
             if 'age' in df.columns:
-                negative_ages = df[df['age'] < 0]
-                if len(negative_ages) > 0:
-                    rule_violations_found = True
-                    st.write(f"❌ 'age < 0' 업무규칙 위반: {len(negative_ages)}건")
-                    rule_violations = negative_ages.copy()
-                    rule_violations['violation_type'] = '음수 나이'
-                    if all_rule_violations.empty:
-                        all_rule_violations = rule_violations
-                    else:
-                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                try:
+                    # Convert to numeric, coercing errors to NaN
+                    numeric_age = pd.to_numeric(df['age'], errors='coerce')
+                    negative_ages_mask = numeric_age < 0
+                    negative_ages = df[negative_ages_mask]
+                    if len(negative_ages) > 0:
+                        rule_violations_found = True
+                        st.write(f"❌ 'age < 0' 업무규칙 위반: {len(negative_ages)}건")
+                        rule_violations = negative_ages.copy()
+                        rule_violations['violation_type'] = '음수 나이'
+                        if all_rule_violations.empty:
+                            all_rule_violations = rule_violations
+                        else:
+                            all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                except:
+                    pass  # Skip if conversion fails
 
             # 업무규칙 3: join_year는 미래가 아니어야 함
             if 'join_year' in df.columns:
-                future_years = df[df['join_year'] > datetime.now().year]
-                if len(future_years) > 0:
-                    rule_violations_found = True
-                    st.write(f"❌ 'join_year > 현재 연도' 업무규칙 위반: {len(future_years)}건")
-                    rule_violations = future_years.copy()
-                    rule_violations['violation_type'] = '미래 가입 연도'
-                    if all_rule_violations.empty:
-                        all_rule_violations = rule_violations
-                    else:
-                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                try:
+                    # Convert to numeric, coercing errors to NaN
+                    numeric_join_year = pd.to_numeric(df['join_year'], errors='coerce')
+                    future_years_mask = numeric_join_year > datetime.now().year
+                    future_years = df[future_years_mask]
+                    if len(future_years) > 0:
+                        rule_violations_found = True
+                        st.write(f"❌ 'join_year > 현재 연도' 업무규칙 위반: {len(future_years)}건")
+                        rule_violations = future_years.copy()
+                        rule_violations['violation_type'] = '미래 가입 연도'
+                        if all_rule_violations.empty:
+                            all_rule_violations = rule_violations
+                        else:
+                            all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                except:
+                    pass  # Skip if conversion fails
 
             # 업무규칙 4: join_year는 1900년 이전이 아니어야 함
             if 'join_year' in df.columns:
-                past_years = df[df['join_year'] < 1900]
-                if len(past_years) > 0:
-                    rule_violations_found = True
-                    st.write(f"❌ 'join_year < 1900' 업무규칙 위반: {len(past_years)}건")
-                    rule_violations = past_years.copy()
-                    rule_violations['violation_type'] = '1900년 이전 가입 연도'
-                    if all_rule_violations.empty:
-                        all_rule_violations = rule_violations
-                    else:
-                        all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                try:
+                    # Convert to numeric, coercing errors to NaN
+                    numeric_join_year = pd.to_numeric(df['join_year'], errors='coerce')
+                    past_years_mask = (numeric_join_year < 1900) & (numeric_join_year > 0)  # Only check positive values
+                    past_years = df[past_years_mask]
+                    if len(past_years) > 0:
+                        rule_violations_found = True
+                        st.write(f"❌ 'join_year < 1900' 업무규칙 위반: {len(past_years)}건")
+                        rule_violations = past_years.copy()
+                        rule_violations['violation_type'] = '1900년 이전 가입 연도'
+                        if all_rule_violations.empty:
+                            all_rule_violations = rule_violations
+                        else:
+                            all_rule_violations = pd.concat([all_rule_violations, rule_violations])
+                except:
+                    pass  # Skip if conversion fails
 
             if rule_violations_found:
                 st.subheader("업무규칙 위반 상세 데이터:")
